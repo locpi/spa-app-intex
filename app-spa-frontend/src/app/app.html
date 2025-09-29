@@ -1,0 +1,15 @@
+<div class="spa-app">
+  <header class="spa-header">
+    <h1>{{ title() }}</h1>
+    <div class="status-bar">
+      <span class="status-indicator status-on"></span>
+      <span>Système connecté</span>
+    </div>
+  </header>
+
+  <main class="spa-main">
+    <app-spa-controller></app-spa-controller>
+  </main>
+</div>
+
+<router-outlet />

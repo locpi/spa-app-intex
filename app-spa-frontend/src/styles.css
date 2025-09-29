@@ -1,0 +1,105 @@
+/* Removed @angular/material/theming import - not needed for custom styling */
+
+/* Global styles for Spa Control App */
+:root {
+  --spa-primary: #2c5aa0;
+  --spa-secondary: #7fb3d3;
+  --spa-accent: #81c784;
+  --spa-warm: #ffab91;
+  --spa-dark: #263238;
+  --spa-light: #eceff1;
+  --spa-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --spa-water-gradient: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--spa-gradient);
+  min-height: 100vh;
+  color: var(--spa-dark);
+}
+
+.spa-container {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.spa-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 15px;
+  padding: 20px;
+  margin: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.spa-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.spa-button {
+  background: var(--spa-water-gradient);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.spa-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.temp-display {
+  font-size: 2.5rem;
+  font-weight: 300;
+  color: var(--spa-primary);
+  text-align: center;
+  margin: 20px 0;
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.status-on {
+  background: var(--spa-accent);
+  box-shadow: 0 0 10px var(--spa-accent);
+}
+
+.status-off {
+  background: #bdbdbd;
+}
+
+.control-slider {
+  background: var(--spa-light);
+  border-radius: 10px;
+  margin: 15px 0;
+}
+
+.automation-card {
+  background: linear-gradient(135deg, var(--spa-accent) 0%, #66bb6a 100%);
+  color: white;
+}
+
+.relaxation-mode {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+}

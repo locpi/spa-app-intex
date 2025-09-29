@@ -1,0 +1,35 @@
+.spa-app {
+  min-height: 100vh;
+  padding: 20px;
+  background: var(--spa-gradient);
+}
+
+.spa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 15px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(10px);
+}
+
+.spa-header h1 {
+  color: var(--spa-primary);
+  font-size: 2rem;
+  font-weight: 300;
+  margin: 0;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  color: var(--spa-dark);
+  font-weight: 500;
+}
+
+.spa-main {
+  display: flex;
+  justify-content: center;
+}

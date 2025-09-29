@@ -1,0 +1,19 @@
+# ACL pour l'application Spa
+# Format: user <username>
+#         topic [read|write|readwrite] <topic>
+
+# Utilisateur pour l'application backend
+user spa_client
+topic readwrite spa/+
+topic readwrite spa/command/+
+topic readwrite spa/status/+
+topic readwrite spa/temperature/+
+
+# Utilisateur pour le spa hardware (ESP32/Arduino)
+user spa_device
+topic readwrite spa/status/+
+topic readwrite spa/temperature/+
+topic read spa/command/+
+
+# Pattern général pour tous les topics spa
+pattern readwrite spa/%u/+

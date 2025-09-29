@@ -1,0 +1,164 @@
+version: '3.8'
+
+services:
+  # Traefik - Reverse Proxy avec SSL automatique
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      # API et Dashboard
+      - --api.dashboard=true
+      - --api.insecure=false
+      # Points d'entrée
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # Redirection HTTP -> HTTPS
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+      # Providers Docker
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      # Let's Encrypt
+      - --certificatesresolvers.letsencrypt.acme.email=loic@loicpincon.fr
+      - --certificatesresolvers.letsencrypt.acme.storage=/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      # Logs
+      - --log.level=INFO
+      - --accesslog=true
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Dashboard Traefik (optionnel)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/acme.json:/acme.json
+    labels:
+      - "traefik.enable=true"
+      # Dashboard Traefik (optionnel - sécuriser en production)
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.loicpincon.fr`)"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+    networks:
+      - spa-network
+
+  # Base de données PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: spa_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: spa_db
+      POSTGRES_USER: spa_user
+      POSTGRES_PASSWORD: spa_password_2024!
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"  # Port exposé pour développement
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spa_user -d spa_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - spa-network
+
+  # Serveur MQTT (Eclipse Mosquitto)
+  mqtt:
+    image: eclipse-mosquitto:2.0
+    container_name: spa_mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"  # MQTT
+      - "9001:9001"  # WebSocket MQTT
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+      - mosquitto_data:/mosquitto/data
+    labels:
+      - "traefik.enable=true"
+      # WebSocket MQTT via HTTPS
+      - "traefik.http.routers.mqtt-ws.rule=Host(`mqtt.loicpincon.fr`)"
+      - "traefik.http.routers.mqtt-ws.tls.certresolver=letsencrypt"
+      - "traefik.http.services.mqtt-ws.loadbalancer.server.port=9001"
+    networks:
+      - spa-network
+
+  # API Backend Spring Boot
+  spa-api:
+    build:
+      context: ./spa-app-back
+      dockerfile: Dockerfile
+    container_name: spa_api
+    restart: unless-stopped
+    environment:
+      # Database
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/spa_db
+      SPRING_DATASOURCE_USERNAME: spa_user
+      SPRING_DATASOURCE_PASSWORD: spa_password_2024!
+      # MQTT
+      MQTT_BROKER_URL: tcp://mqtt:1883
+      MQTT_USERNAME: spa_client
+      MQTT_PASSWORD: spa_mqtt_2024!
+      # Profils Spring
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.spa-api.rule=Host(`spa-api.loicpincon.fr`)"
+      - "traefik.http.routers.spa-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.spa-api.loadbalancer.server.port=8080"
+    networks:
+      - spa-network
+
+  # Frontend Angular
+  spa-frontend:
+    build:
+      context: ./app-spa-frontend
+      dockerfile: Dockerfile
+    container_name: spa_frontend
+    restart: unless-stopped
+    environment:
+      API_URL: https://spa-api.loicpincon.fr
+      MQTT_WS_URL: wss://mqtt.loicpincon.fr
+    depends_on:
+      - spa-api
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.spa-frontend.rule=Host(`spa.loicpincon.fr`)"
+      - "traefik.http.routers.spa-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.spa-frontend.loadbalancer.server.port=80"
+    networks:
+      - spa-network
+
+  # Watchtower pour les mises à jour automatiques (optionnel)
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=3600  # 1 heure
+    networks:
+      - spa-network
+
+volumes:
+  postgres_data:
+    driver: local
+  mosquitto_data:
+    driver: local
+
+networks:
+  spa-network:
+    driver: bridge

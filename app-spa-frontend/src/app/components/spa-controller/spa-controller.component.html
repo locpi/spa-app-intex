@@ -1,0 +1,298 @@
+<div class="spa-controller">
+  <div class="controller-grid">
+
+    <!-- Température -->
+    <div class="spa-card temperature-card">
+      <h3>
+        <span class="status-indicator" [class]="isHeating() ? 'status-on' : 'status-off'"></span>
+        Température
+      </h3>
+      <div class="temp-display">{{ temperature() }}°C</div>
+      <div class="temp-target">
+        <label>Cible: {{ targetTemperature() }}°C</label>
+        <input
+          type="range"
+          min="20"
+          max="42"
+          [value]="targetTemperature()"
+          (input)="onTemperatureChange(+$event.target.value)"
+          class="control-slider">
+      </div>
+      <button
+        class="spa-button"
+        (click)="toggleHeating()"
+        [class.active]="isHeating()">
+        {{ isHeating() ? 'Arrêter' : 'Démarrer' }} Chauffage
+      </button>
+    </div>
+
+    <!-- Bulles -->
+    <div class="spa-card bubbles-card">
+      <h3>
+        <span class="status-indicator" [class]="isBubblesOn() ? 'status-on' : 'status-off'"></span>
+        💨 Bulles
+      </h3>
+      <div class="bubbles-status">
+        <div class="bubble-icon" [class.active]="isBubblesOn()">
+          🫧
+        </div>
+        <p>{{ isBubblesOn() ? 'Activées' : 'Désactivées' }}</p>
+      </div>
+      <button
+        class="spa-button"
+        (click)="toggleBubbles()"
+        [class.active]="isBubblesOn()">
+        {{ isBubblesOn() ? 'Arrêter' : 'Démarrer' }} Bulles
+      </button>
+    </div>
+
+    <!-- Filtration -->
+    <div class="spa-card filter-card">
+      <h3>
+        <span class="status-indicator" [class]="isFilterOn() ? 'status-on' : 'status-off'"></span>
+        Filtration
+      </h3>
+      <div class="filter-status">
+        <p>{{ isFilterOn() ? 'En fonctionnement' : 'Arrêtée' }}</p>
+      </div>
+      <button
+        class="spa-button"
+        (click)="toggleFilter()"
+        [class.active]="isFilterOn()">
+        {{ isFilterOn() ? 'Arrêter' : 'Démarrer' }}
+      </button>
+    </div>
+
+    <!-- Modes Rapides -->
+    <div class="spa-card quick-modes-card">
+      <h3>🚀 Modes Rapides</h3>
+      <div class="quick-mode-buttons">
+        <button class="quick-mode-btn relax" (click)="activateQuickMode('relax')">
+          🧘 Détente
+          <small>37°C + Bulles</small>
+        </button>
+        <button class="quick-mode-btn eco" (click)="activateQuickMode('eco')">
+          🌱 Économie
+          <small>28°C</small>
+        </button>
+        <button class="quick-mode-btn heat" (click)="activateQuickMode('heat')">
+          🔥 Chauffage Max
+          <small>40°C</small>
+        </button>
+      </div>
+    </div>
+
+    <!-- Scénarios récurrents -->
+    <div class="spa-card scenarios-card">
+      <h3>🔄 Scénarios Récurrents (Quotidiens)</h3>
+
+      <div class="scenarios-list">
+        @for (scenario of scenarios(); track scenario.id) {
+          <div class="scenario-item" [class.active]="scenario.active">
+            <div class="scenario-info">
+              <h4>{{ scenario.name }} <span class="recurring-badge">Quotidien</span></h4>
+              <p>{{ scenario.time }} - {{ scenario.targetTemp }}°C
+                @if (scenario.maintainTemp) {
+                  <span> (maintenir {{ scenario.maintainTemp }}°C)</span>
+                }
+                @if (scenario.bubblesOn) {
+                  <span> + Bulles</span>
+                }
+                @if (scenario.duration) {
+                  <span> ({{ scenario.duration }}min)</span>
+                }
+              </p>
+            </div>
+            <div class="scenario-controls">
+              <button
+                class="toggle-btn"
+                (click)="toggleScenario(scenario.id)"
+                [class.active]="scenario.active">
+                {{ scenario.active ? 'ON' : 'OFF' }}
+              </button>
+              <button class="delete-btn" (click)="deleteScenario(scenario.id)">🗑️</button>
+            </div>
+          </div>
+        }
+      </div>
+
+      <!-- Nouveau scénario récurrent -->
+      <div class="new-scenario">
+        <h4>➕ Nouveau Scénario Récurrent</h4>
+        <div class="scenario-form">
+          <input
+            type="text"
+            placeholder="Nom du scénario"
+            [(ngModel)]="newScenario.name"
+            class="form-input">
+          <input
+            type="time"
+            [(ngModel)]="newScenario.time"
+            class="form-input">
+          <div class="temp-input">
+            <label>Température: {{ newScenario.targetTemp }}°C</label>
+            <input
+              type="range"
+              min="20"
+              max="42"
+              [(ngModel)]="newScenario.targetTemp"
+              class="control-slider">
+          </div>
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              [(ngModel)]="newScenario.bubblesOn">
+            Activer les bulles
+          </label>
+          <button class="add-scenario-btn" (click)="addScenario()">
+            Ajouter Scénario
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sessions programmées -->
+    <div class="spa-card sessions-card">
+      <h3>📅 Sessions Programmées</h3>
+
+      <div class="sessions-list">
+        @for (session of sessions(); track session.id) {
+          <div class="session-item" [class]="getSessionStatusClass(session.status)">
+            <div class="session-info">
+              <h4>{{ session.name }}</h4>
+              <p class="session-datetime">
+                📅 {{ session.date | date:'dd/MM/yyyy' }} à {{ session.time }}
+              </p>
+              <p class="session-details">
+                🌡️ {{ session.targetTemp }}°C - ⏱️ {{ session.duration }}min
+                @if (session.bubblesOn) {
+                  <span> + 🫧 Bulles</span>
+                }
+              </p>
+              <p class="session-status">
+                Statut: {{ getSessionStatusText(session.status) }}
+              </p>
+            </div>
+            <div class="session-controls">
+              @if (session.status === 'scheduled') {
+                <button class="start-btn" (click)="startSession(session.id)">
+                  ▶️ Démarrer
+                </button>
+              }
+              @if (session.status === 'active') {
+                <button class="complete-btn" (click)="completeSession(session.id)">
+                  ✅ Terminer
+                </button>
+              }
+              @if (session.status === 'scheduled' || session.status === 'active') {
+                <button class="cancel-btn" (click)="cancelSession(session.id)">
+                  ❌ Annuler
+                </button>
+              }
+              <button class="delete-btn" (click)="deleteSession(session.id)">🗑️</button>
+            </div>
+          </div>
+        }
+      </div>
+
+      <!-- Nouvelle session -->
+      <div class="new-session">
+        <h4>➕ Programmer une Session</h4>
+        <div class="session-form">
+          <input
+            type="text"
+            placeholder="Nom de la session (ex: Session détente dimanche)"
+            [(ngModel)]="newSession.name"
+            class="form-input">
+
+          <div class="datetime-inputs">
+            <div class="input-group">
+              <label>Date</label>
+              <input
+                type="date"
+                [(ngModel)]="newSession.date"
+                class="form-input">
+            </div>
+            <div class="input-group">
+              <label>Heure</label>
+              <input
+                type="time"
+                [(ngModel)]="newSession.time"
+                class="form-input">
+            </div>
+          </div>
+
+          <div class="temp-input">
+            <label>Température: {{ newSession.targetTemp }}°C</label>
+            <input
+              type="range"
+              min="20"
+              max="42"
+              [(ngModel)]="newSession.targetTemp"
+              class="control-slider">
+          </div>
+
+          <div class="duration-input">
+            <label>Durée: {{ newSession.duration }}min</label>
+            <input
+              type="range"
+              min="15"
+              max="180"
+              step="15"
+              [(ngModel)]="newSession.duration"
+              class="control-slider">
+          </div>
+
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              [(ngModel)]="newSession.bubblesOn">
+            Activer les bulles pendant la session
+          </label>
+
+          <button class="add-session-btn" (click)="addSession()">
+            📅 Programmer la Session
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statut système -->
+    <div class="spa-card status-card">
+      <h3>📊 Statut Système</h3>
+      <div class="system-status">
+        <div class="status-item">
+          <span>Chauffage:</span>
+          <span [class]="isHeating() ? 'status-on' : 'status-off'">
+            {{ isHeating() ? 'Actif' : 'Inactif' }}
+          </span>
+        </div>
+        <div class="status-item">
+          <span>Bulles:</span>
+          <span [class]="isBubblesOn() ? 'status-on' : 'status-off'">
+            {{ isBubblesOn() ? 'Activées' : 'Désactivées' }}
+          </span>
+        </div>
+        <div class="status-item">
+          <span>Filtration:</span>
+          <span [class]="isFilterOn() ? 'status-on' : 'status-off'">
+            {{ isFilterOn() ? 'Active' : 'Inactive' }}
+          </span>
+        </div>
+        <div class="status-item">
+          <span>Automation:</span>
+          <span [class]="automationMode() ? 'status-on' : 'status-off'">
+            {{ automationMode() ? 'Active' : 'Manuelle' }}
+          </span>
+        </div>
+      </div>
+
+      <button
+        class="spa-button automation-toggle"
+        (click)="toggleAutomation()"
+        [class.active]="automationMode()">
+        {{ automationMode() ? 'Désactiver' : 'Activer' }} Automation
+      </button>
+    </div>
+  </div>
+</div>
