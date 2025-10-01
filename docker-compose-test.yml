@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Traefik - Reverse Proxy
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik-test
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Dashboard Traefik
+    command:
+      # API et Dashboard
+      - --api.insecure=true
+      - --api.dashboard=true
+      # Points d'entrée
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # Providers Docker
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      # Logs
+      - --log.level=INFO
+      - --accesslog=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - test-network
+
+  # Serveur MQTT (Eclipse Mosquitto)
+  mqtt:
+    image: eclipse-mosquitto:2.0
+    container_name: mqtt-test
+    restart: unless-stopped
+    ports:
+      - "1883:1883"  # MQTT
+      - "9001:9001"  # WebSocket MQTT
+    volumes:
+      - ./mosquitto-test.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    labels:
+      - "traefik.enable=true"
+      # WebSocket MQTT via HTTP
+      - "traefik.http.routers.mqtt-ws.rule=Host(`spa-mqtt.loicpincon.fr`)"
+      - "traefik.http.routers.mqtt-ws.entrypoints=web"
+      - "traefik.http.services.mqtt-ws.loadbalancer.server.port=9001"
+    networks:
+      - test-network
+
+volumes:
+  mosquitto_data:
+  mosquitto_logs:
+
+networks:
+  test-network:
+    driver: bridge

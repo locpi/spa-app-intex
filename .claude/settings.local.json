@@ -4,7 +4,12 @@
       "Bash(npm install:*)",
       "Bash(npm start)",
       "Read(//Users/loicpincon/Documents/**)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(mvn:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(timeout 10 npm start)"
     ],
     "deny": [],
     "ask": []

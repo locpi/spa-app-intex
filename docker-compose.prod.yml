@@ -154,10 +154,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_POLL_INTERVAL=3600  # 1 heure
+      - WATCHTOWER_POLL_INTERVAL=30  # 1 heure
       - WATCHTOWER_INCLUDE_STOPPED=true
       - WATCHTOWER_REVIVE_STOPPED=false
-    command: --interval 3600 --cleanup spa_api spa_frontend
+    command: --interval 30 --cleanup spa_api spa_frontend
     networks:
       - spa-network
 

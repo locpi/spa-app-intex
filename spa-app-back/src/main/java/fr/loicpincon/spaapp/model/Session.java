@@ -129,20 +129,3 @@ public class Session {
         }
     }
 }
-
-enum SessionStatus {
-    SCHEDULED("Programmée"),
-    ACTIVE("En cours"),
-    COMPLETED("Terminée"),
-    CANCELLED("Annulée");
-
-    private final String displayName;
-
-    SessionStatus(String displayName) {
-        this.displayName = displayName;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-}

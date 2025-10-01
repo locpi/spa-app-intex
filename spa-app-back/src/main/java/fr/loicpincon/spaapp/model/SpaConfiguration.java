@@ -118,6 +118,14 @@ public class SpaConfiguration {
     @Column(name = "temperature_reached_notification", nullable = false)
     private Boolean temperatureReachedNotification = true;
 
+    @Builder.Default
+    @Column(name = "error_notification", nullable = false)
+    private Boolean errorNotification = true;
+
+    @Builder.Default
+    @Column(name = "maintenance_reminder_enabled", nullable = false)
+    private Boolean maintenanceReminderEnabled = true;
+
     // Métadonnées
     @Size(max = 100)
     @Column(name = "spa_name", length = 100)

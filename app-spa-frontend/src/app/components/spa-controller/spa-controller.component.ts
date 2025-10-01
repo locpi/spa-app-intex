@@ -1,31 +1,26 @@
-import { Component, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
-interface Scenario {
-  id: string;
-  name: string;
-  time: string;
-  targetTemp: number;
-  maintainTemp?: number;
-  bubblesOn: boolean;
-  duration?: number;
-  active: boolean;
-  isRecurring?: boolean; // Pour les scénarios récurrents (quotidiens)
-}
+import {
+  AppStateService,
+  SpaStateService,
+  SessionService,
+  ScenarioService,
+  SpaConfigurationService
+} from '../../services';
 
-interface Session {
-  id: string;
-  name: string;
-  date: string; // Format YYYY-MM-DD
-  time: string; // Format HH:MM
-  targetTemp: number;
-  duration: number; // en minutes
-  bubblesOn: boolean;
-  status: 'scheduled' | 'active' | 'completed' | 'cancelled';
-  startedAt?: string;
-  completedAt?: string;
-}
+import {
+  SpaState,
+  Session,
+  Scenario,
+  SpaConfiguration,
+  CreateSessionRequest,
+  CreateScenarioRequest,
+  SessionStatus
+} from '../../models';
 
 @Component({
   selector: 'app-spa-controller',
@@ -34,266 +29,410 @@ interface Session {
   templateUrl: './spa-controller.component.html',
   styleUrls: ['./spa-controller.component.css']
 })
-export class SpaControllerComponent {
-  temperature = signal(24);
-  targetTemperature = signal(37);
-  isHeating = signal(false);
-  isBubblesOn = signal(false);
-  isFilterOn = signal(true);
+export class SpaControllerComponent implements OnInit, OnDestroy {
+  private destroy$ = new Subject<void>();
 
+  // État réactif de l'application
+  appState = signal<any>(null);
+  spaState = signal<SpaState | null>(null);
+  sessions = signal<Session[]>([]);
+  scenarios = signal<Scenario[]>([]);
+  configuration = signal<SpaConfiguration | null>(null);
+
+  // États dérivés
+  isOnline = computed(() => this.spaState()?.isOnline === true);
+  hasError = computed(() => this.spaState()?.isInErrorState === true);
+  isHeating = computed(() => this.spaState()?.isHeating === true);
+  temperature = computed(() => this.spaState()?.currentTemperature || 0);
+  currentTemperature = computed(() => this.spaState()?.currentTemperature || 0);
+  targetTemperature = computed(() => this.spaState()?.targetTemperature || 0);
+  isBubblesOn = computed(() => this.spaState()?.bubblesActive === true);
+  isFilterOn = computed(() => this.spaState()?.filterActive === true);
+
+  // Mode automation (pour compatibilité avec le template)
   automationMode = signal(false);
 
-  scenarios = signal<Scenario[]>([
-    {
-      id: '1',
-      name: 'Chauffage du soir',
-      time: '23:00',
-      targetTemp: 37,
-      maintainTemp: 37,
-      bubblesOn: false,
-      active: true,
-      isRecurring: true
-    },
-    {
-      id: '2',
-      name: 'Préparation détente',
-      time: '19:00',
-      targetTemp: 35,
-      maintainTemp: 35,
-      bubblesOn: true,
-      duration: 120,
-      active: false,
-      isRecurring: true
-    },
-    {
-      id: '3',
-      name: 'Economie nocturne',
-      time: '01:00',
-      targetTemp: 25,
-      bubblesOn: false,
-      active: true,
-      isRecurring: true
-    }
-  ]);
-
-  sessions = signal<Session[]>([
-    {
-      id: '1',
-      name: 'Session relaxation weekend',
-      date: '2025-09-30',
-      time: '15:00',
-      targetTemp: 38,
-      duration: 90,
-      bubblesOn: true,
-      status: 'scheduled'
-    },
-    {
-      id: '2',
-      name: 'Préparation invités',
-      date: '2025-10-01',
-      time: '18:30',
-      targetTemp: 37,
-      duration: 60,
-      bubblesOn: false,
-      status: 'scheduled'
-    }
-  ]);
-
-  newScenario: Scenario = {
-    id: '',
+  // Variables pour les formulaires
+  newScenario: CreateScenarioRequest = {
     name: '',
-    time: '',
-    targetTemp: 37,
-    bubblesOn: false,
-    active: false,
+    executionTime: '',
+    targetTemperature: 37,
+    bubblesEnabled: false,
     isRecurring: true
   };
 
-  newSession: Session = {
-    id: '',
+  newSession: CreateSessionRequest = {
     name: '',
-    date: new Date(Date.now() + 86400000).toISOString().split('T')[0], // Tomorrow
-    time: '19:00',
-    targetTemp: 37,
-    duration: 60,
-    bubblesOn: false,
-    status: 'scheduled'
+    scheduledStartTime: '',
+    targetTemperature: 37,
+    durationMinutes: 60,
+    bubblesEnabled: false
   };
 
-  onTemperatureChange(value: number) {
-    this.targetTemperature.set(value);
+  // Propriétés pour compatibilité avec le template existant
+  get bubblesOn() { return this.newSession.bubblesEnabled; }
+  set bubblesOn(value: boolean) { this.newSession.bubblesEnabled = value; }
+
+  constructor(
+    private appStateService: AppStateService,
+    private spaStateService: SpaStateService,
+    private sessionService: SessionService,
+    private scenarioService: ScenarioService,
+    private configurationService: SpaConfigurationService
+  ) {
+    this.initializeNewSession();
   }
 
-  toggleHeating() {
-    this.isHeating.set(!this.isHeating());
+  ngOnInit() {
+    // Initialise l'application
+    this.appStateService.initializeApp();
+
+    // S'abonne aux changements d'état
+    this.appStateService.appState$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(state => {
+        this.appState.set(state);
+        this.spaState.set(state.spaState);
+        this.sessions.set(state.sessions);
+        this.scenarios.set(state.scenarios);
+        this.configuration.set(state.configuration);
+      });
   }
 
-  toggleBubbles() {
-    this.isBubblesOn.set(!this.isBubblesOn());
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
-  toggleFilter() {
-    this.isFilterOn.set(!this.isFilterOn());
-  }
+  // Contrôles du spa
+  async setTargetTemperature(temperature: number) {
+    if (!this.isValidTemperature(temperature)) {
+      this.showError('Température invalide');
+      return;
+    }
 
-  toggleAutomation() {
-    this.automationMode.set(!this.automationMode());
-  }
-
-  toggleScenario(scenarioId: string) {
-    const scenarios = this.scenarios();
-    const updatedScenarios = scenarios.map(scenario =>
-      scenario.id === scenarioId
-        ? { ...scenario, active: !scenario.active }
-        : scenario
-    );
-    this.scenarios.set(updatedScenarios);
-  }
-
-  addScenario() {
-    if (this.newScenario.name && this.newScenario.time) {
-      const scenarios = this.scenarios();
-      const newId = (scenarios.length + 1).toString();
-      const scenario: Scenario = {
-        ...this.newScenario,
-        id: newId
-      };
-      this.scenarios.set([...scenarios, scenario]);
-      this.resetNewScenario();
+    try {
+      await this.spaStateService.setTargetTemperature(temperature).toPromise();
+      this.showSuccess('Température cible définie');
+    } catch (error) {
+      this.showError('Erreur lors de la définition de la température');
     }
   }
 
-  deleteScenario(scenarioId: string) {
-    const scenarios = this.scenarios();
-    const updatedScenarios = scenarios.filter(scenario => scenario.id !== scenarioId);
-    this.scenarios.set(updatedScenarios);
+  async toggleHeating() {
+    try {
+      if (this.isHeating()) {
+        await this.spaStateService.stopHeating().toPromise();
+        this.showSuccess('Chauffage arrêté');
+      } else {
+        await this.spaStateService.startHeating().toPromise();
+        this.showSuccess('Chauffage démarré');
+      }
+    } catch (error) {
+      this.showError('Erreur lors du contrôle du chauffage');
+    }
   }
 
-  resetNewScenario() {
+  async toggleBubbles() {
+    try {
+      await this.spaStateService.toggleBubbles().toPromise();
+      this.showSuccess(this.isBubblesOn() ? 'Bulles désactivées' : 'Bulles activées');
+    } catch (error) {
+      this.showError('Erreur lors du contrôle des bulles');
+    }
+  }
+
+  async toggleFilter() {
+    try {
+      await this.spaStateService.toggleFilter().toPromise();
+      this.showSuccess(this.isFilterOn() ? 'Filtre désactivé' : 'Filtre activé');
+    } catch (error) {
+      this.showError('Erreur lors du contrôle du filtre');
+    }
+  }
+
+  // Modes rapides
+  async activateQuickMode(mode: 'relax' | 'eco' | 'heat') {
+    const config = this.configuration();
+    if (!config) return;
+
+    let temperature: number;
+    let startHeating = false;
+
+    switch (mode) {
+      case 'relax':
+        temperature = config.defaultRelaxTemperature;
+        startHeating = true;
+        break;
+      case 'eco':
+        temperature = config.defaultEcoTemperature;
+        startHeating = false;
+        break;
+      case 'heat':
+        temperature = config.defaultHeatTemperature;
+        startHeating = true;
+        break;
+      default:
+        return;
+    }
+
+    try {
+      await this.setTargetTemperature(temperature);
+      if (startHeating) {
+        await this.spaStateService.startHeating().toPromise();
+      }
+      this.showSuccess(`Mode ${mode} activé`);
+    } catch (error) {
+      this.showError(`Erreur lors de l'activation du mode ${mode}`);
+    }
+  }
+
+  // Gestion des scénarios
+  async addScenario() {
+    if (!this.newScenario.name || !this.newScenario.executionTime) {
+      this.showError('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    if (!this.isValidTemperature(this.newScenario.targetTemperature)) {
+      this.showError('Température invalide');
+      return;
+    }
+
+    try {
+      await this.scenarioService.createScenario(this.newScenario).toPromise();
+      this.showSuccess('Scénario créé avec succès');
+      this.resetNewScenario();
+    } catch (error) {
+      this.showError('Erreur lors de la création du scénario');
+    }
+  }
+
+  async toggleScenario(scenarioId: number | undefined) {
+    if (!scenarioId) return;
+
+    try {
+      await this.scenarioService.toggleScenario(scenarioId).toPromise();
+      this.showSuccess('Statut du scénario modifié');
+    } catch (error) {
+      this.showError('Erreur lors de la modification du scénario');
+    }
+  }
+
+  async deleteScenario(scenarioId: number | undefined) {
+    if (!scenarioId) return;
+
+    try {
+      await this.scenarioService.deleteScenario(scenarioId).toPromise();
+      this.showSuccess('Scénario supprimé');
+    } catch (error) {
+      this.showError('Erreur lors de la suppression du scénario');
+    }
+  }
+
+  async executeScenario(scenarioId: number | undefined) {
+    if (!scenarioId) return;
+
+    try {
+      await this.scenarioService.executeScenario(scenarioId).toPromise();
+      this.showSuccess('Scénario exécuté');
+    } catch (error) {
+      this.showError('Erreur lors de l\'exécution du scénario');
+    }
+  }
+
+  // Gestion des sessions
+  async addSession() {
+    if (!this.newSession.name || !this.newSession.scheduledStartTime) {
+      this.showError('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    if (!this.isValidTemperature(this.newSession.targetTemperature)) {
+      this.showError('Température invalide');
+      return;
+    }
+
+    if (!this.isValidDuration(this.newSession.durationMinutes)) {
+      this.showError('Durée invalide');
+      return;
+    }
+
+    try {
+      await this.sessionService.createSession(this.newSession).toPromise();
+      this.showSuccess('Session créée avec succès');
+      this.resetNewSession();
+    } catch (error) {
+      this.showError('Erreur lors de la création de la session');
+    }
+  }
+
+  async startSession(sessionId: number | undefined) {
+    if (!sessionId) return;
+
+    try {
+      await this.sessionService.startSession(sessionId).toPromise();
+      this.showSuccess('Session démarrée');
+    } catch (error) {
+      this.showError('Erreur lors du démarrage de la session');
+    }
+  }
+
+  async stopSession(sessionId: number | undefined) {
+    if (!sessionId) return;
+
+    try {
+      await this.sessionService.stopSession(sessionId).toPromise();
+      this.showSuccess('Session arrêtée');
+    } catch (error) {
+      this.showError('Erreur lors de l\'arrêt de la session');
+    }
+  }
+
+  async cancelSession(sessionId: number | undefined) {
+    if (!sessionId) return;
+
+    try {
+      await this.sessionService.cancelSession(sessionId).toPromise();
+      this.showSuccess('Session annulée');
+    } catch (error) {
+      this.showError('Erreur lors de l\'annulation de la session');
+    }
+  }
+
+  async deleteSession(sessionId: number | undefined) {
+    if (!sessionId) return;
+
+    try {
+      await this.sessionService.deleteSession(sessionId).toPromise();
+      this.showSuccess('Session supprimée');
+    } catch (error) {
+      this.showError('Erreur lors de la suppression de la session');
+    }
+  }
+
+  // Session rapide
+  async startQuickSession(temperature: number, durationMinutes: number) {
+    if (!this.isValidTemperature(temperature) || !this.isValidDuration(durationMinutes)) {
+      this.showError('Paramètres invalides');
+      return;
+    }
+
+    try {
+      await this.sessionService.startQuickSession(temperature, durationMinutes).toPromise();
+      this.showSuccess('Session rapide démarrée');
+    } catch (error) {
+      this.showError('Erreur lors du démarrage de la session rapide');
+    }
+  }
+
+  // Utilitaires
+  private isValidTemperature(temperature: number): boolean {
+    const config = this.configuration();
+    if (!config) return false;
+    return temperature >= config.minTemperature && temperature <= config.maxTemperature;
+  }
+
+  private isValidDuration(durationMinutes: number): boolean {
+    const config = this.configuration();
+    if (!config) return false;
+    return durationMinutes > 0 && durationMinutes <= config.maxSessionDurationMinutes;
+  }
+
+  private resetNewScenario() {
     this.newScenario = {
-      id: '',
       name: '',
-      time: '',
-      targetTemp: 37,
-      bubblesOn: false,
-      active: false,
+      executionTime: '',
+      targetTemperature: 37,
+      bubblesEnabled: false,
       isRecurring: true
     };
   }
 
-  // Sessions management
-  addSession() {
-    if (this.newSession.name && this.newSession.date && this.newSession.time) {
-      const sessions = this.sessions();
-      const newId = (sessions.length + 1).toString();
-      const session: Session = {
-        ...this.newSession,
-        id: newId
-      };
-      this.sessions.set([...sessions, session]);
-      this.resetNewSession();
-    }
+  private resetNewSession() {
+    this.initializeNewSession();
   }
 
-  deleteSession(sessionId: string) {
-    const sessions = this.sessions();
-    const updatedSessions = sessions.filter(session => session.id !== sessionId);
-    this.sessions.set(updatedSessions);
-  }
-
-  startSession(sessionId: string) {
-    const sessions = this.sessions();
-    const updatedSessions = sessions.map(session =>
-      session.id === sessionId
-        ? { ...session, status: 'active' as const, startedAt: new Date().toISOString() }
-        : session
-    );
-    this.sessions.set(updatedSessions);
-
-    // Apply session settings
-    const session = sessions.find(s => s.id === sessionId);
-    if (session) {
-      this.targetTemperature.set(session.targetTemp);
-      this.isBubblesOn.set(session.bubblesOn);
-      this.isHeating.set(true);
-    }
-  }
-
-  completeSession(sessionId: string) {
-    const sessions = this.sessions();
-    const updatedSessions = sessions.map(session =>
-      session.id === sessionId
-        ? { ...session, status: 'completed' as const, completedAt: new Date().toISOString() }
-        : session
-    );
-    this.sessions.set(updatedSessions);
-  }
-
-  cancelSession(sessionId: string) {
-    const sessions = this.sessions();
-    const updatedSessions = sessions.map(session =>
-      session.id === sessionId
-        ? { ...session, status: 'cancelled' as const }
-        : session
-    );
-    this.sessions.set(updatedSessions);
-  }
-
-  resetNewSession() {
-    // Set default date to tomorrow
+  private initializeNewSession() {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const defaultDate = tomorrow.toISOString().split('T')[0];
+    tomorrow.setHours(19, 0, 0, 0);
 
     this.newSession = {
-      id: '',
       name: '',
-      date: defaultDate,
-      time: '19:00',
-      targetTemp: 37,
-      duration: 60,
-      bubblesOn: false,
-      status: 'scheduled'
+      scheduledStartTime: tomorrow.toISOString(),
+      targetTemperature: 37,
+      durationMinutes: 60,
+      bubblesEnabled: false
     };
   }
 
+  // Helpers pour le template
   getSessionStatusText(status: string): string {
     switch (status) {
-      case 'scheduled': return 'Programmée';
-      case 'active': return 'En cours';
-      case 'completed': return 'Terminée';
-      case 'cancelled': return 'Annulée';
+      case SessionStatus.SCHEDULED: return 'Programmée';
+      case SessionStatus.ACTIVE: return 'En cours';
+      case SessionStatus.COMPLETED: return 'Terminée';
+      case SessionStatus.CANCELLED: return 'Annulée';
       default: return status;
     }
   }
 
   getSessionStatusClass(status: string): string {
     switch (status) {
-      case 'scheduled': return 'status-scheduled';
-      case 'active': return 'status-active';
-      case 'completed': return 'status-completed';
-      case 'cancelled': return 'status-cancelled';
+      case SessionStatus.SCHEDULED: return 'status-scheduled';
+      case SessionStatus.ACTIVE: return 'status-active';
+      case SessionStatus.COMPLETED: return 'status-completed';
+      case SessionStatus.CANCELLED: return 'status-cancelled';
       default: return '';
     }
   }
 
-  activateQuickMode(mode: 'relax' | 'eco' | 'heat') {
-    switch (mode) {
-      case 'relax':
-        this.targetTemperature.set(37);
-        this.isBubblesOn.set(true);
-        this.isHeating.set(true);
-        break;
-      case 'eco':
-        this.targetTemperature.set(28);
-        this.isBubblesOn.set(false);
-        this.isHeating.set(false);
-        break;
-      case 'heat':
-        this.targetTemperature.set(40);
-        this.isBubblesOn.set(false);
-        this.isHeating.set(true);
-        break;
-    }
+  getSpaStatusText(): string {
+    if (!this.isOnline()) return 'Hors ligne';
+    if (this.hasError()) return 'Erreur';
+    if (this.appState()?.activeSession) return 'Session en cours';
+    if (this.isHeating()) return 'Chauffage en cours';
+    return 'En veille';
+  }
+
+  getSpaStatusClass(): string {
+    if (!this.isOnline()) return 'status-offline';
+    if (this.hasError()) return 'status-error';
+    if (this.appState()?.activeSession) return 'status-session';
+    if (this.isHeating()) return 'status-heating';
+    return 'status-idle';
+  }
+
+  // État des notifications
+  notification = signal<{message: string, type: 'success' | 'error'} | null>(null);
+
+  // Notifications
+  private showSuccess(message: string) {
+    this.notification.set({message, type: 'success'});
+    setTimeout(() => this.notification.set(null), 3000);
+    console.log('✅ Success:', message);
+  }
+
+  private showError(message: string) {
+    this.notification.set({message, type: 'error'});
+    setTimeout(() => this.notification.set(null), 5000);
+    console.error('❌ Error:', message);
+  }
+
+  // Refresh manuel
+  refreshData() {
+    this.appStateService.refreshAll();
+    this.showSuccess('Données actualisées');
+  }
+
+  // Méthodes pour compatibilité avec le template existant
+  onTemperatureChange(value: number) {
+    this.setTargetTemperature(value);
+  }
+
+  toggleAutomation() {
+    this.automationMode.set(!this.automationMode());
+    this.showSuccess(`Mode automatique ${this.automationMode() ? 'activé' : 'désactivé'}`);
   }
 }

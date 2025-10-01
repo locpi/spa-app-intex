@@ -4,8 +4,17 @@
     <div class="status-bar">
       <span class="status-indicator status-on"></span>
       <span>Système connecté</span>
+      <button (click)="toggleConnectionTest()" class="test-button">
+        {{ showConnectionTest() ? 'Masquer' : 'Afficher' }} les tests
+      </button>
     </div>
   </header>
+
+  @if (showConnectionTest()) {
+    <section class="connection-test-section">
+      <app-connection-test></app-connection-test>
+    </section>
+  }
 
   <main class="spa-main">
     <app-spa-controller></app-spa-controller>

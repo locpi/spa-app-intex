@@ -38,7 +38,7 @@ public class ScenarioService {
             throw new IllegalArgumentException("Un scénario est déjà programmé à cette heure");
         }
 
-        scenario.setActive(true);
+        scenario.setIsActive(true);
         Scenario saved = scenarioRepository.save(scenario);
         log.info("Scénario créé: {} à {}", saved.getName(), saved.getExecutionTime());
 
@@ -60,7 +60,7 @@ public class ScenarioService {
                 existing.setTargetTemperature(scenarioUpdate.getTargetTemperature());
                 existing.setBubblesEnabled(scenarioUpdate.getBubblesEnabled());
                 existing.setDurationMinutes(scenarioUpdate.getDurationMinutes());
-                existing.setActive(scenarioUpdate.isActive());
+                existing.setIsActive(scenarioUpdate.getIsActive());
 
                 Scenario saved = scenarioRepository.save(existing);
                 log.info("Scénario mis à jour: {}", saved.getName());
@@ -86,11 +86,11 @@ public class ScenarioService {
     public Scenario toggleScenarioStatus(Long id) {
         return scenarioRepository.findById(id)
             .map(scenario -> {
-                scenario.setActive(!scenario.isActive());
+                scenario.setIsActive(!scenario.getIsActive());
                 Scenario saved = scenarioRepository.save(scenario);
                 log.info("Statut du scénario '{}' changé: {}",
                     saved.getName(),
-                    saved.isActive() ? "activé" : "désactivé");
+                    saved.getIsActive() ? "activé" : "désactivé");
                 return saved;
             })
             .orElseThrow(() -> new IllegalArgumentException("Scénario non trouvé avec l'ID: " + id));

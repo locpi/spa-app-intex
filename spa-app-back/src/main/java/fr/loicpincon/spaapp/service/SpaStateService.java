@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -189,14 +190,14 @@ public class SpaStateService {
         if (previous == null) return;
 
         // Changement de statut en ligne/hors ligne
-        if (!Boolean.equals(previous.getIsOnline(), current.getIsOnline())) {
+        if (!Objects.equals(previous.getIsOnline(), current.getIsOnline())) {
             log.info("Spa {} : {}",
                     Boolean.TRUE.equals(current.getIsOnline()) ? "connecté" : "déconnecté",
                     current.getStatusSummary());
         }
 
         // Changement d'état de chauffage
-        if (!Boolean.equals(previous.getIsHeating(), current.getIsHeating())) {
+        if (!Objects.equals(previous.getIsHeating(), current.getIsHeating())) {
             log.info("Chauffage {} - Température: {}°C → {}°C",
                     Boolean.TRUE.equals(current.getIsHeating()) ? "démarré" : "arrêté",
                     current.getCurrentTemperature(),
@@ -209,7 +210,7 @@ public class SpaStateService {
         }
 
         // Début/Fin de session
-        if (!Boolean.equals(previous.getActiveSessionId(), current.getActiveSessionId())) {
+        if (!Objects.equals(previous.getActiveSessionId(), current.getActiveSessionId())) {
             if (current.hasActiveSession()) {
                 log.info("Session démarrée: ID {}", current.getActiveSessionId());
             } else if (previous.hasActiveSession()) {
@@ -218,7 +219,7 @@ public class SpaStateService {
         }
 
         // État d'erreur
-        if (!Boolean.equals(previous.getIsInErrorState(), current.getIsInErrorState())
+        if (!Objects.equals(previous.getIsInErrorState(), current.getIsInErrorState())
             && Boolean.TRUE.equals(current.getIsInErrorState())) {
             log.error("Erreur spa détectée: {}", current.getErrorMessage());
         }
